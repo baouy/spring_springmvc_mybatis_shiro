@@ -1,115 +1,203 @@
 spring-springmvc
 ===
 ## 项目介绍
-单纯的spring整合springmvc+mybatis，整合所需算是最简配置
+在之前的mybatis整合项目之后，新增日志、简单集成shiro，之前的代码不予展示与介绍，想了解的请参考mybatis整合项目
 
 ## 项目结构
 main
-- controller:控制层，UserController展示了两种返回而类型情况:跳转页面和返回对象  
+- controller:控制层，ShiroUserController，主要包含登录及几个页面跳转
 
   部分代码展示:
 ```
- //    @RequestMapping("getUser")
-    @RequestMapping(value = "getUser", method = RequestMethod.GET)
-    public String getUser(@RequestParam("id") Long id, Model model) {
-        User user = userServicre.getById(id);
-        model.addAttribute("user", user);
-        return "user";
-    }
-
-    @RequestMapping("getById")
-    @ResponseBody
-    /*
-    POJO对象要转成Json，则要求POJO中的属性必须都有getter方法
-    需要有json对应的包
-    不加返回时406报错：
-    The resource identified by this request is only capable of generating responses with characteristics not acceptable according to the request "accept" headers.-->
-    */
-    public User getById(@RequestParam("id") Long id) {
-        User user = userServicre.getById(id);
-        return user;
+   @RequestMapping("/login")
+    public String login(ShiroUser shiroUser, HttpServletRequest request) {
+        Subject subject = SecurityUtils.getSubject();
+        UsernamePasswordToken token = new UsernamePasswordToken(shiroUser.getUsername(), shiroUser.getPassword());
+        try {
+            subject.login(token);//会跳到我们自定义的realm中
+            request.getSession().setAttribute("user", shiroUser);
+            log.info(shiroUser.getUsername() + "登录");
+            return "success";
+        } catch (UnknownAccountException e) {
+            request.getSession().setAttribute("user", shiroUser);
+            return "login";
+        } catch (IncorrectCredentialsException e) {
+            request.getSession().setAttribute("user", shiroUser);
+            request.setAttribute("error", "用户名或密码错误！");
+            return "login";
+        }
     }
 ```    
-- service:业务处理层，包含一个impl包，Service以接口类型存在，impl包下存放Service接口的实现类
+- service:业务处理层，包含一个impl包，Service以接口类型存在，impl包下存放Service接口的实现类,ShiroUserServiceImpl包含用户、角色、权限相关操作
+
+  部分代码展示：
+ ```
+ @Service("shiroUserService")
+public class ShiroUserServiceImpl implements ShiroUserService {
+    @Resource
+    private ShiroUserMapper shiroUserMapper;
+
+    public ShiroUser getByUsername(String username) {
+        return shiroUserMapper.getByUsername(username);
+    }
+
+    public Set<String> getRoles(String username) {
+        return shiroUserMapper.getRoles(username);
+    }
+
+    public Set<String> getPermissions(String username) {
+        return shiroUserMapper.getPermissions(username);
+    }
+}
+ ```
 - dao:数据库交互层
 - model:实体对象层
+- realm: 自定义Realm(shiro相关)
+
+部分代码展示：
+```
+public class MyRealm extends AuthorizingRealm {
+
+    @Resource
+    private ShiroUserService shiroUserService;
+
+    // 为当前登陆成功的用户授予权限和角色，已经登陆成功了
+    @Override
+    protected AuthorizationInfo doGetAuthorizationInfo(
+            PrincipalCollection principals) {
+
+        String username = (String) principals.getPrimaryPrincipal(); //获取用户名
+        SimpleAuthorizationInfo authorizationInfo = new SimpleAuthorizationInfo();
+        authorizationInfo.setRoles(shiroUserService.getRoles(username));
+        authorizationInfo.setStringPermissions(shiroUserService.getPermissions(username));
+        return authorizationInfo;
+    }
+
+    // 验证当前登录的用户，获取认证信息
+    @Override
+    protected AuthenticationInfo doGetAuthenticationInfo(
+            AuthenticationToken token) throws AuthenticationException {
+        String username = (String) token.getPrincipal(); // 获取用户名
+        ShiroUser shiroUser = shiroUserService.getByUsername(username);
+        if (shiroUser != null) {
+            AuthenticationInfo authcInfo = new SimpleAuthenticationInfo(shiroUser.getUsername(), shiroUser.getPassword(), "myRealm");
+            return authcInfo;
+        } else {
+            return null;
+        }
+    }
+}
+```
 
 resources
 - application.xml:spring配置文件入口，加载spring-config.xml
 - spring-mvc.xml:springmvc配置相关文件
-
+- spring-config.xml:加载其他集成的配置文件，这里加载spring-mybatis.xml、spring-shiro.xml和db.properties
+- spring-mybatis.xml：mybatis相关配置文件
+- spring-shiro.xml:shiro配置相关文件
   部分代码展示:
 ```
-    <!-- 自动扫描该包，使SpringMVC认为包下用了@controller注解的类是控制器 -->
-    <context:component-scan base-package="com.py.controller">
-        <context:include-filter type="annotation" expression="org.springframework.stereotype.Controller"/>
-    </context:component-scan>
+   <!-- 自定义Realm -->
+    <bean id="myRealm" class="com.py.realm.MyRealm"/>
 
-    <!--注解方式(处理请求)-->
-    <mvc:annotation-driven/>
- 
-<!--静态资源默认servlet配置a
-    	1、加入对静态资源的处理:js,css,gif,png
-    	2、允许使用"/"做整体映射
-    -->
-    <mvc:default-servlet-handler/>
-     <!-- 静态资源处理  css js imgs 可以直接访问而不被拦截-->
-    <mvc:resources mapping="/html/**" location="/WEB-INF/html/"/>
-
-    <!-- 定义跳转的文件的前后缀 ，视图模式配置  解析控制层return "index" 一类的操作-->
-    <bean class="org.springframework.web.servlet.view.InternalResourceViewResolver">
-        <property name="prefix" value="/WEB-INF/jsp/"/>
-        <property name="suffix" value=".jsp"/>
-    </bean>
-```
-- spring-config.xml:加载其他集成的配置文件，这里加载spring-mybatis.xml和db.properties
-- spring-mybatis.xml：mybatis相关配置文件
-
-  部分代码展示
-```
- <!-- 自动扫描(自动注入) -->
-    <context:component-scan base-package="com.py.*"/>
-
-    <!-- 配置数据源 -->
-    <bean id="dataSource" class="com.alibaba.druid.pool.DruidDataSource"
-          init-method="init" destroy-method="close">
-        <property name="driverClassName" value="${db.driver}"/>
-        <property name="url" value="${db.url}"/>
-        <property name="username" value="${db.username}"/>
-        <property name="password" value="${db.password}"/>
-        <!-- 初始化连接大小 -->
-        <property name="initialSize" value="${initialSize}"></property>
-        <!-- 连接池最大数量 -->
-        <property name="maxActive" value="${maxActive}"></property>
-        <!-- 连接池最大空闲 -->
-        <!--<property name="maxIdle" value="${maxIdle}"></property>-->
-        <!-- 连接池最小空闲 -->
-        <property name="minIdle" value="${minIdle}"></property>
-        <!-- 获取连接最大等待时间 -->
-        <property name="maxWait" value="${maxWait}"></property>
-
-        <property name="filters" value="stat,log4j,wall"/>
-
+    <!-- 安全管理器 -->
+    <bean id="securityManager" class="org.apache.shiro.web.mgt.DefaultWebSecurityManager">
+        <property name="realm" ref="myRealm"/>
     </bean>
 
-
-    <!-- myBatis文件 -->
-    <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
-        <property name="dataSource" ref="dataSource"/>
-        <!-- 自动扫描mapping.xml文件 -->
-        <!--以mapper命名时报错：
-        org.apache.ibatis.binding.BindingException: Invalid bound statement (not found)-->
-        <!--<property name="mapperLocations" value="classpath*:mapping/*.xml"/>-->
-        <property name="mapperLocations" value="classpath*:mapping/*.xml"/>
+    <!--自定义退出路径-->
+    <bean id="logout1" class="org.apache.shiro.web.filter.authc.LogoutFilter">
+        <property name="redirectUrl" value="/shiro/user/index"/>
     </bean>
 
-    <!-- DAO接口所在包名，Spring会自动查找其下的类 -->
-    <bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
-        <property name="basePackage" value="com.py.dao"/>
-        <property name="sqlSessionFactoryBeanName" value="sqlSessionFactory"/>
+    <!-- Shiro过滤器 -->
+    <bean id="shiroFilter" class="org.apache.shiro.spring.web.ShiroFilterFactoryBean">
+        <!-- Shiro的核心安全接口,这个属性是必须的 -->
+        <property name="securityManager" ref="securityManager"/>
+        <!-- 身份认证失败，则跳转到登录页面的配置 -->
+        <property name="loginUrl" value="/shiro/user/login"/>
+        <!-- 权限认证失败，则跳转到指定页面 -->
+        <property name="unauthorizedUrl" value="/shiro/user/unauthorized"/>
+        <!-- Shiro连接约束配置,即过滤链的定义 -->
+        <property name="filterChainDefinitions">
+            <value>
+                /shiro/user/logout = logout <!--与操作指令key(logout)对应-->
+                /shiro/user/login=anon  <!--登录不拦截-->
+                /shiro/user/person*=authc  <!--表示需认证才能使用-->
+                <!--注意URL Pattern里用到的是两颗星,这样才能实现任意层次的全匹配-->
+                /shiro/user/student*/**=roles[student]  <!--访问需要student角色-->
+                <!--多参时必须加上引号,且参数之间用逗号分割-->
+                /shiro/user/teacher*/**=perms["user:create"] <!--访问需要user:create权限-->
+            </value>
+        </property>
+        <property name="filters">
+            <map>
+                <entry key="logout" value-ref="logout1"/> <!--操作指令(logout)与过滤器(LogoutFilter拦截器id)对应-->
+            </map>
+        </property>
+    </bean>
+
+    <!-- 保证实现了Shiro内部lifecycle函数的bean执行 -->
+    <bean id="lifecycleBeanPostProcessor" class="org.apache.shiro.spring.LifecycleBeanPostProcessor"/>
+
+    <!-- 开启Shiro注解 -->
+    <bean class="org.springframework.aop.framework.autoproxy.DefaultAdvisorAutoProxyCreator"
+          depends-on="lifecycleBeanPostProcessor"/>
+    <bean class="org.apache.shiro.spring.security.interceptor.AuthorizationAttributeSourceAdvisor">
+        <property name="securityManager" ref="securityManager"/>
     </bean>
 ```
 - db.properties：数据库相关参数
+- log4j.properties：日志相关配置
+部分代码展示：
+```
+###Log4j建议只使用四个级别，优先级从高到低分别是ERROR、WARN、INFO、DEBUG
+log4j.rootLogger=info, console, log, error
+
+###Console ###
+#输出到控制台
+log4j.appender.console = org.apache.log4j.ConsoleAppender
+log4j.appender.console.Target = System.out
+log4j.appender.console.layout = org.apache.log4j.PatternLayout
+log4j.appender.console.layout.ConversionPattern = %d %p[%C:%L]- %m%n
+
+### log ###
+#输出到文件
+log4j.appender.log = org.apache.log4j.DailyRollingFileAppender
+#日志编码设置
+log4j.appender.log.Encoding=UTF-8
+#文件路径(绝对路径)
+log4j.appender.log.File = E:/my_project/spring-springmvc-mybatis/logs/log.log
+#true为追加,false为覆盖，默认为true
+log4j.appender.log.Append = true
+
+#针对DEBUG级别以上的日志,低于DEBUG级别的日志不显示，这里设置为DEBUG没有意义
+log4j.appender.log.Threshold = DEBUG
+log4j.appender.log.DatePattern='.'yyyy-MM-dd
+
+#指定布局模式
+log4j.appender.log.layout = org.apache.log4j.PatternLayout
+log4j.appender.log.layout.ConversionPattern = %d %p[%c:%L] - %m%n
+
+
+### Error ###
+log4j.appender.error = org.apache.log4j.DailyRollingFileAppender
+log4j.appender.error.File = E:/my_project/spring-springmvc-mybatis/logs/error.log
+log4j.appender.error.Append = true
+log4j.appender.error.Threshold = ERROR 
+log4j.appender.error.DatePattern='.'yyyy-MM-dd
+log4j.appender.error.layout = org.apache.log4j.PatternLayout
+log4j.appender.error.layout.ConversionPattern =%d %p[%c:%L] - %m%n
+
+###控制台打印sql配置
+log4j.logger.com.ibatis=DEBUG
+log4j.logger.com.ibatis.common.jdbc.SimpleDataSource=DEBUG
+log4j.logger.com.ibatis.common.jdbc.ScriptRunner=DEBUG
+log4j.logger.com.ibatis.sqlmap.engine.impl.SqlMapClientDelegate=DEBUG
+log4j.logger.java.sql.Connection=DEBUG
+log4j.logger.java.sql.Statement=DEBUG
+log4j.logger.java.sql.PreparedStatement=DEBUG
+```
 - mapping:存放mybatis映射文件，以UserMapper.xml为例
 
   部分代码展示：
@@ -128,32 +216,18 @@ webapp
 
   部分代码展示:
 ```
-<!-- SpringMVC核心 -->
-    <servlet>
-        <servlet-name>SpringMVC</servlet-name>
-        <servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
+ <!-- shiro过滤器定义 -->
+    <filter>
+        <filter-name>shiroFilter</filter-name>
+        <filter-class>org.springframework.web.filter.DelegatingFilterProxy</filter-class>
         <init-param>
-            <param-name>contextConfigLocation</param-name>
-            <param-value>classpath*:spring-mvc.xml</param-value>
+            <!-- 该值缺省为false,表示生命周期由SpringApplicationContext管理,设置为true则表示由ServletContainer管理 -->
+            <param-name>targetFilterLifecycle</param-name>
+            <param-value>true</param-value>
         </init-param>
-        <load-on-startup>1</load-on-startup>
-    </servlet>
-
-    <!-- Spring的配置文件 -->
-    <context-param>
-        <param-name>contextConfigLocation</param-name>
-        <param-value>classpath*:application.xml</param-value>
-    </context-param>
-
-    <!-- Spring监听器 -->
-    <listener>
-        <listener-class>org.springframework.web.context.ContextLoaderListener</listener-class>
-    </listener>
-    <!-- SpringMVC拦截设置 -->
-    <servlet-mapping>
-        <servlet-name>SpringMVC</servlet-name>
-        <!-- 由SpringMVC拦截所有请求 -->
-        <url-pattern>/</url-pattern>
-    </servlet-mapping>
-    <!-- SpringMVC拦截设置结束 -->
+    </filter>
+    <filter-mapping>
+        <filter-name>shiroFilter</filter-name>
+        <url-pattern>/*</url-pattern>
+    </filter-mapping>
  ```
