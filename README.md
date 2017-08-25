@@ -7,7 +7,7 @@ spring-springmvc
 ### java：代码
 - controller:控制层，ShiroUserController，主要包含登录及几个页面跳转
 ```
-@RequestMapping("/login")
+    @RequestMapping("/login")
     public String login(ShiroUser shiroUser, HttpServletRequest request) {
         Subject subject = SecurityUtils.getSubject();
         UsernamePasswordToken token = new UsernamePasswordToken(shiroUser.getUsername(), shiroUser.getPassword());
@@ -296,4 +296,46 @@ CREATE TABLE `user` (
 -- ----------------------------
 INSERT INTO `user` VALUES ('1', '张三', '123456', '835852265@qq.com');
 
+```
+### pom.xml：maven相关
+```
+        <!-- 日志相关 begin-->
+        <!--不加会报异常：应该是某包的依赖
+               Property 'filters' threw exception; nested exception is java.lang.NoClassDefFoundError: org/apache/log4j/Priority-->
+        <dependency>
+            <groupId>log4j</groupId>
+            <artifactId>log4j</artifactId>
+            <version>${log4j.version}</version>
+        </dependency>
+
+        <!--不加会报异常：应该是springframework.web的依赖
+            严重: Exception sending context destroyed event to listener instance of class org.springframework.web.context.ContextLoaderListener
+            java.lang.NoClassDefFoundError: org/slf4j/LoggerFactory-->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+
+        <!--slf4j-log4j12:链接slf4j-api和log4j中间的适配器-->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-log4j12</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+        <!-- 日志格式化end -->
+
+        <!--shiro相关-->
+        <dependency>
+            <groupId>org.apache.shiro</groupId>
+            <artifactId>shiro-all</artifactId>
+            <version>${shiro-version}</version>
+        </dependency>
+
+        <!--lombok插件相关-->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.16.8</version>
+        </dependency>
 ```
