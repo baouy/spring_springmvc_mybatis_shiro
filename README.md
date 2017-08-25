@@ -4,10 +4,8 @@ spring-springmvc
 在之前的mybatis整合项目之后，新增日志、简单集成shiro，之前的代码不予展示与介绍，想了解的请参考mybatis整合项目
 
 ## 项目结构
-main
+### main
 - controller:控制层，ShiroUserController，主要包含登录及几个页面跳转
-
-  部分代码展示:
 ```
    @RequestMapping("/login")
     public String login(ShiroUser shiroUser, HttpServletRequest request) {
@@ -29,8 +27,6 @@ main
     }
 ```    
 - service:业务处理层，包含一个impl包，Service以接口类型存在，impl包下存放Service接口的实现类,ShiroUserServiceImpl包含用户、角色、权限相关操作
-
-  部分代码展示：
  ```
  @Service("shiroUserService")
 public class ShiroUserServiceImpl implements ShiroUserService {
@@ -53,8 +49,6 @@ public class ShiroUserServiceImpl implements ShiroUserService {
 - dao:数据库交互层
 - model:实体对象层
 - realm: 自定义Realm(shiro相关)
-
-部分代码展示：
 ```
 public class MyRealm extends AuthorizingRealm {
 
@@ -89,13 +83,12 @@ public class MyRealm extends AuthorizingRealm {
 }
 ```
 
-resources
+### resources
 - application.xml:spring配置文件入口，加载spring-config.xml
 - spring-mvc.xml:springmvc配置相关文件
 - spring-config.xml:加载其他集成的配置文件，这里加载spring-mybatis.xml、spring-shiro.xml和db.properties
 - spring-mybatis.xml：mybatis相关配置文件
 - spring-shiro.xml:shiro配置相关文件
-  部分代码展示:
 ```
    <!-- 自定义Realm -->
     <bean id="myRealm" class="com.py.realm.MyRealm"/>
@@ -149,7 +142,6 @@ resources
 ```
 - db.properties：数据库相关参数
 - log4j.properties：日志相关配置
-部分代码展示：
 ```
 ###Log4j建议只使用四个级别，优先级从高到低分别是ERROR、WARN、INFO、DEBUG
 log4j.rootLogger=info, console, log, error
@@ -199,8 +191,6 @@ log4j.logger.java.sql.Statement=DEBUG
 log4j.logger.java.sql.PreparedStatement=DEBUG
 ```
 - mapping:存放mybatis映射文件，以UserMapper.xml为例
-
-  部分代码展示：
 ```
 <!--与dao中的接口类对应-->
 <mapper namespace="com.py.dao.UserMapper">
@@ -211,10 +201,8 @@ log4j.logger.java.sql.PreparedStatement=DEBUG
 
 </mapper>
 ```
-webapp
+### webapp
 - web.xml
-
-  部分代码展示:
 ```
  <!-- shiro过滤器定义 -->
     <filter>
